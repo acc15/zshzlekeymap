@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 import subprocess
 from enum import Enum, auto
+import typing
 
 class ZshZleBindingType(Enum):
     WIDGET = auto()
@@ -15,65 +16,59 @@ class ZshZleBinding:
     type: ZshZleBindingType
 
 class CharIter:
-    string: str
-    position: int
+    value: str
+    pos: int
     
     def __init__(self, s: str, p: int = 0):
-        self.string = s
-        self.position = p
+        self.value = s
+        self.pos = p
 
     def has_next(self):
-        return self.position < len(self.string)
+        return self.pos < len(self.value)
 
     def peek(self):
-        assert self.has_next()
-        return self.string[self.position : self.position + 1]
+        return self.value[self.pos : self.pos + 1]
     
+    def skip(self, amount: int = 1):
+        self.pos += amount
+
     def next(self):
-        result = self.peek()
-        self.position += 1
-        return result
+        res = self.peek()
+        self.pos += 1
+        return res
     
     def remainder(self):
-        return self.string[self.position:]
+        return self.value[self.pos:]
 
 def parse_quoted_string(it: CharIter) -> str:
     assert it.next() == '"'
-
+    start_pos = it.pos
     next_escape = False
-    result = ""
-
-    while it.has_next():
-        ch = it.next()
+    while ch := it.next():
         if next_escape:
-            result += ch
             next_escape = False
-            continue
-        if ch == '\\':
-            next_escape = True
             continue
         if ch == '"':
             break
-        result += ch
-    return result
+        if ch == '\\':
+            next_escape = True
 
-def parse_zshzle_binding(binding: str) -> ZshZleBinding:
-    it = CharIter(binding)
-    key = parse_quoted_string(it)
-    sep = it.next()
-    key_end = None
-    if sep == "-":
-        key_end = parse_quoted_string(it)
-        sep = it.next()
+    return it.value[start_pos:it.pos-1]
+
+def parse_zshzle_binding(b: str) -> ZshZleBinding:
+    it = CharIter(b)
     
-    text = None
-    type = ZshZleBindingType.WIDGET
-    if it.peek() == '"':
-        text = parse_quoted_string(it)
-        type = ZshZleBindingType.COMMAND
-    else:
-        text = it.remainder()
-
+    key = parse_quoted_string(it)
+    key_end: Optional[str] = None
+    if it.next() == "-":
+        key_end = parse_quoted_string(it)
+        it.skip()
+    
+    text, type = (
+        (parse_quoted_string(it), ZshZleBindingType.COMMAND) 
+        if it.peek() == '"' else 
+        (it.remainder(), ZshZleBindingType.WIDGET) 
+    )
     return ZshZleBinding(key, key_end, text, type)
 
 def get_zshzle_bindings():
