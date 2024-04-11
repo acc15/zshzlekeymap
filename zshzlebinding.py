@@ -1,8 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 import subprocess
 from enum import Enum, auto
-import typing
 
 class ZshZleBindingType(Enum):
     WIDGET = auto()
