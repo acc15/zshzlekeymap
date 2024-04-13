@@ -35,16 +35,16 @@ csi = {
     (1, 'E'): "KpBegin"
 }
 
-csi_mod_bits = {
-    7: "Num Lock",
-    6: "Caps Lock",
-    5: "Meta",
-    4: "Hyper",
-    3: "Super",
-    2: "Ctrl",
-    1: "Alt",
-    0: "Shift"
-}
+modifiers = [
+    ("Num Lock", 7),
+    ("Caps Lock", 6),
+    ("Meta", 5),
+    ("Hyper", 4),
+    ("Super", 3),
+    ("Ctrl", 2),
+    ("Alt", 1),
+    ("Shift", 0)
+]
 
 esc = {
     "^M": [["Enter"], ["Ctrl", "M"]],
@@ -81,7 +81,7 @@ def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
         csi_key, csi_mod = int(m["csi_key"] or "1"), int(m["csi_mod"] or "0")
         if key := csi.get((csi_key, csi_trailer)):
             return tuple(
-                [ mod for mod_bit, mod in csi_mod_bits.items() if csi_mod > 0 and (csi_mod - 1) & (1 << mod_bit) != 0 ] + 
+                [ mod for mod, bit in modifiers if csi_mod > 0 and (csi_mod - 1) & (1 << bit) != 0 ] + 
                 [ key ]
             )
     else:
