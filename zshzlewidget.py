@@ -3,11 +3,11 @@ from html.parser import HTMLParser
 from typing import Optional
 import subprocess
 import re
+import json
 
 @dataclass
 class ZshZleWidget:
     section: str
-    widget: str
     description: str
 
 class ZshZleManHTMLParser(HTMLParser):
@@ -30,8 +30,8 @@ class ZshZleManHTMLParser(HTMLParser):
     description: Optional[str] = None
     """STANDARD WIDGETS > p[style=margin-left=18%]:first > all text in any nested tags"""
 
-    widgets: list[ZshZleWidget] = []
-    """list of parsed widgets"""
+    widgets: dict[str, ZshZleWidget] = {}
+    """parsed widgets"""
 
     def handle_starttag(self, tag, attrs):
         self.h2 = tag == "h2"
@@ -74,9 +74,9 @@ class ZshZleManHTMLParser(HTMLParser):
     def process(self):
         description = fix_ws(self.description)
         for spec in self.specs:
-            command = parse_widget_from_spec(fix_ws(spec))
-            if command:
-                self.widgets.append(ZshZleWidget(self.section, command, description))
+            widget = parse_widget_from_spec(fix_ws(spec))
+            if widget:
+                self.widgets[widget] = ZshZleWidget(self.section, description)
 
 def fix_ws(str: str):
     stripped = str.strip()
@@ -86,7 +86,15 @@ def parse_widget_from_spec(spec: str) -> Optional[str]:
     match = re.fullmatch(r"([a-z0-9\-]+).*", spec)
     return match.group(1) if match else None
 
-def parse_zshzle_standard_widgets() -> list[ZshZleWidget]:
+def parse_zshzle_standard_widgets() -> dict[str, ZshZleWidget]:
     parser = ZshZleManHTMLParser()
     parser.feed(subprocess.run(["man", "-Thtml", "zshzle"], capture_output=True, text=True, encoding="utf-8").stdout)
     return parser.widgets
+
+def parse_zshzle_aux_widgets() -> dict[str, ZshZleWidget]:
+    with open("aux_widgets.json") as f:
+        data: dict[str, object] = json.load(f)
+    return { k: ZshZleWidget(**v) for k, v in data.items() }
+    
+def parse_zshzle_widgets():
+    return { **parse_zshzle_standard_widgets(), **parse_zshzle_aux_widgets() }

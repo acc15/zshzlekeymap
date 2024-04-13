@@ -1,126 +1,157 @@
 from dataclasses import dataclass
 from typing import Iterable, Optional
-from zshzlebinding import ZshZleBinding
-import re 
+import re
 
-KeyChord = tuple[str, ...]
+from groupby import groupby 
 
-@dataclass
-class EscapeChord:
-    escapes: list[str]
-    chords: list[list[str]]
+KeyChord = tuple[str,...]
+KeyVariant = frozenset[KeyChord]
+KeySequence = tuple[KeyVariant,...]
 
-lookup_table = [
-    (["^M"], ["Enter"]),
-    (["^I"], ["Tab"]),
-    (["^?"], ["Backspace", ("Ctrl", "Shift", "/")]),
-    (["^H"], [("Ctrl", "Backspace")]),
-    
-    (["^[[2~"], ["Insert"]),
-    (["^[[2;3~"], [("Alt", "Insert")]),
-    (["^[[2;5~"], [("Ctrl", "Insert")]),
-    (["^[[2;7~"], [("Ctrl", "Alt", "Insert")]),
-    
-    (["^[[3~"], ["Delete"]),
-    (["^[[3;3~"], [("Alt", "Delete")]),
-    (["^[[3;4~"], [("Alt", "Shift", "Delete")]),
-    (["^[[3;5~"], [("Ctrl", "Delete")]),
-    (["^[[3;6~"], [("Ctrl", "Shift", "Delete")]),
-    (["^[[3;7~"], [("Ctrl", "Alt", "Delete")]),
-
-    (["^[[5~"], ["PgUp"]),
-    (["^[[5;3~"], [("Alt", "PgUp")]),
-    (["^[[5;5~"], [("Ctrl", "PgUp")]),
-    (["^[[5;6~"], [("Ctrl", "Shift", "PgUp")]),
-    (["^[[5;7~"], [("Ctrl", "Alt", "PgUp")]),
-
-    (["^[[6~"], ["PgDown"]),
-    (["^[[6;3~"], [("Alt", "PgDown")]),
-    (["^[[6;5~"], [("Ctrl", "PgDown")]),
-    (["^[[6;7~"], [("Ctrl", "Alt", "PgDown")]),
-
-    (["^[[H"], ["Home"]),
-    (["^[[1;3H"], [("Alt", "Home")]),
-    (["^[[1;5H"], [("Ctrl", "Home")]),
-    (["^[[1;7H"], [("Ctrl", "Alt", "Home")]),
-
-    (["^[[F"], ["End"]),
-    (["^[[1;3F"], [("Alt", "End")]),
-    (["^[[1;5F"], [("Ctrl", "End")]),
-    (["^[[1;7F"], [("Ctrl", "Alt", "End")]),
-
-    (["^[OA", "^[[A"], ["Up"]),
-    (["^[OB", "^[[B"], ["Down"]),
-    (["^[OC", "^[[C"], ["Right"]),
-    (["^[OD", "^[[D"], ["Left"]),
-]
-
-lookup_map = { 
-    key: frozenset([ chord if isinstance(chord, tuple) else (chord,) for chord in e[1] ]) 
-    for e in lookup_table 
-    for key in e[0] 
+csi = {
+    (27, 'u'): "Escape",
+    (13, 'u'): "Enter",
+    (9, 'u'): "Tab",
+    (127, 'u'): "Backspace",
+    (2, '~'): "Insert",
+    (3, '~'): "Delete",
+    (1, 'D'): "Left",
+    (1, 'C'): "Right",
+    (1, 'A'): "Up",
+    (1, 'B'): "Down",
+    (5, '~'): "PgUp",
+    (6, '~'): "PgDown",
+    (1, 'H'): "Home",
+    (1, 'F'): "End",
+    (1, 'P'): "F1",
+    (1, 'Q'): "F2",
+    (13, '~'): "F3",
+    (1, 'S'): "F4",
+    (15, '~'): "F5",
+    (17, '~'): "F6",
+    (18, '~'): "F7",
+    (19, '~'): "F8",
+    (20, '~'): "F9",
+    (21, '~'): "F10",
+    (23, '~'): "F11",
+    (24, '~'): "F12",
+    (1, 'E'): "KpBegin"
 }
 
-csi_sequence = r'(?P<csi>\^\[\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E])'
-char_sequence = r'(?P<esc>\^\[)?(?P<ctrl>\^)?)(?:\\\\\\(?P<slash>\\)|\\(?P<escchar>.)|(?P<char>.)'
+csi_mod_bits = {
+    7: "Num Lock",
+    6: "Caps Lock",
+    5: "Meta",
+    4: "Hyper",
+    3: "Super",
+    2: "Ctrl",
+    1: "Alt",
+    0: "Shift"
+}
+
+esc = {
+    "^M": [["Enter"], ["Ctrl", "M"]],
+    "^I": [["Tab"], ["Ctrl", "I"]],
+    "^[[Z": [["Shift", "Tab"]],
+    "^?": [["Backspace"]],
+    "^[^?": [["Alt", "Backspace"]],
+    "^H": [["Ctrl", "Backspace"]],
+    "^[^H": [["Ctrl", "Alt", "Backspace"]],
+    "^[^_": [["Ctrl", "Alt", "/"]],
+    "^_": [["Ctrl", "/"]],
+    "^[OA": [["Up"]],
+    "^[OB": [["Down"]],
+    "^[OC": [["Right"]],
+    "^[OD": [["Left"]],
+    "^[OE": [["KpBegin"]],
+    "^[OF": [["End"]],
+    "^[OH": [["Home"]],
+    "^[OP": [["F1"]],
+    "^[OQ": [["F2"]],
+    "^[OR": [["F3"]],
+    "^[OS": [["F4"]]
+}
+
+csi_sequence = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
+char_sequence = r'(?:(?P<esc>\^\[)?(?P<ctrl>\^)?)(?:\\\\\\(?P<slash>\\)|\\(?P<escchar>.)|(?P<char>.))'
 esc_sequence = fr"^(?:{csi_sequence}|{char_sequence})"
 esc_pattern = re.compile(esc_sequence)
 
-def get_chord_by_match(m: Optional[re.Match]) -> Optional[KeyChord]:
-    if m and not m["csi"]:
-        return tuple([k for k in [
+@dataclass
+class MatchedKeyChord:
+    match: re.Match
+    chord: KeyChord
+
+def parse_escape_chord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
+    m = esc_pattern.search(seq) if partial else esc_pattern.fullmatch(seq)
+    if not m:
+        return None
+
+    csi_trailer = m["csi_trailer"]
+
+    if not csi_trailer:
+        return MatchedKeyChord(m, tuple(filter(None, (
             "Ctrl" if m["ctrl"] else None,
             "Alt" if m["esc"] else None,
-            next((m[g] for g in ["slash", "escchar", "char"] if m[g] )).upper()
-        ] if k])
+            next(("Space" if ch == " " else ch.upper() for g in ["slash", "escchar", "char"] if (ch := m[g]) )
+        )))))
 
-def lookup_escape_map(seq: str) -> Optional[str]:
+    csi_key = int(m["csi_key"] or "1")
+    csi_mod = int(m["csi_mod"] or "0")
+    key = csi.get((csi_key, csi_trailer), None)
+    if not key:
+        return None
+    
+    mods = [ mod for mod_bit, mod in csi_mod_bits.items() if csi_mod and (csi_mod - 1) & (1 << mod_bit) != 0 ] 
+    return MatchedKeyChord(m, tuple(mods + [ key ]))
+    
+@dataclass
+class EscLookup:
+    seq: str
+    chords: list[list[str]]
+
+def lookup_esc_map(seq: str) -> Optional[EscLookup]:
     while seq:
-        if seq in lookup_map:
-            return seq
+        chords = esc.get(seq, None)
+        if chords:
+            return EscLookup(seq, chords)
         seq = seq[:-1]
 
-def parse_escape_sequence(seq: str) -> list[set[KeyChord]]:
+def parse_escape_sequence(seq: str) -> Optional[KeySequence]:
     result = []
-    chords = set()
     while seq:
-        lookup_seq = lookup_escape_map(seq)
-        if lookup_seq: # subsequence found in lookup table
-            
-            chords.update(lookup_map[lookup_seq])
-            lookup_chord = get_chord_by_match(esc_pattern.fullmatch(lookup_seq))
-            if lookup_chord:
-                chords.add(lookup_chord)
-            seq = seq[len(lookup_seq):]
-
+        esc_lookup = lookup_esc_map(seq)
+        if esc_lookup: # subsequence found in lookup table
+            result.append(frozenset([ tuple(chord) for chord in esc_lookup.chords]))
+            seq = seq[len(esc_lookup.seq):]
         else:
-            parsed_match = esc_pattern.search(seq)
-            parsed_chord = get_chord_by_match(parsed_match)
-            if parsed_chord:
-                chords.add(parsed_chord)
-                seq = seq[parsed_match.end():]
+            if not (p := parse_escape_chord(seq, True)):
+                return None
+            result.append(frozenset((p.chord,)))
+            seq = seq[p.match.end():]
+    return tuple(result)
 
-        if not chords:
-            return None
-
-        if chords:
-            result.append(chords)
-            chords = set()
-
-    return result
-
-
-def kbd(key: str):
+def format_key(key: str):
     return f"<kbd>{key}</kbd>"
 
-def format_bindings(bindings: Iterable[ZshZleBinding]):
-    return " | ".join([ kbd(b.key) for b in bindings ])
+def format_esc(esc: str):
+    return f"`{esc}`"
 
-print( parse_escape_sequence("^[^n") )
-print( parse_escape_sequence("n") )
-print( parse_escape_sequence("\\\\\\\\") )
-print( parse_escape_sequence("^Q") )
-print( parse_escape_sequence("^M") )
-print( parse_escape_sequence("^[p") )
-print( parse_escape_sequence("^[^\\\\\\\\") )
-print( parse_escape_sequence("^[[3;5~^M^I") )
+def format_chord(chord: KeyChord) -> str:
+    return "+".join(map(format_key, chord))
+
+def format_variants(variants: KeyVariant) -> str:
+    return " | ".join(map(format_chord, variants))
+
+def format_sequence(seq: Optional[KeySequence]) -> str:
+    if seq:
+        return ", ".join(map(format_variants, seq))
+    else:
+        return "Unknown key"
+
+def format_binding(seq: Optional[KeySequence], escapes: Iterable[str]) -> str:
+    return f"* {format_sequence(seq)} ({', '.join(map(format_esc, escapes))})"
+
+def format_escapes(escapes: Iterable[str]) -> str:
+    grouped_keys = groupby(escapes, key=parse_escape_sequence)
+    return "\n".join([ format_binding(seq, esc) for seq, esc in grouped_keys ])

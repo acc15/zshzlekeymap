@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+import sys
 from typing import Optional
 import subprocess
 from enum import Enum, auto
+import re
 
 class ZshZleBindingType(Enum):
     WIDGET = auto()
@@ -12,7 +14,7 @@ class ZshZleBinding:
     key: str
     key_end: Optional[str]
     text: str
-    type: ZshZleBindingType
+    command: bool\
 
 def q(name: str):
     return fr'(?:"(?P<{name}>(?:\.|.)*?)")'
@@ -23,8 +25,8 @@ def parse_zshzle_binding(binding: str) -> ZshZleBinding:
     if not (m := binding_pattern.fullmatch(binding)):
         raise ValueError(f"can't parse zshzle binding: {binding}")
     text, type = (
-        (m["widget"], ZshZleBindingType.WIDGET) if m["widget"] else 
-        (m["command"], ZshZleBindingType.COMMAND)
+        (m["widget"], False) if m["widget"] else 
+        (m["command"], True)
     )
     return ZshZleBinding(m["key"], m["key_end"], text, type)
 

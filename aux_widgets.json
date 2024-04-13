@@ -1,0 +1,6 @@
+{
+    "_correct_filename": {
+        "section": "Debug",
+        "description": "Function to correct a filename. Can be used as a completion widget, or as a function in its own right, in which case it will print the corrected filename to standard output."
+    }
+}
