@@ -1,11 +1,8 @@
-from dataclasses import dataclass
-from typing import Iterable, Optional
 import re
-
-from groupby import groupby 
+from typing import NamedTuple, Optional
 
 KeyChord = tuple[str,...]
-KeyVariant = frozenset[KeyChord]
+KeyVariant = tuple[KeyChord,...]
 KeySequence = tuple[KeyVariant,...]
 
 csi = {
@@ -72,86 +69,50 @@ esc = {
     "^[OS": [["F4"]]
 }
 
+esc_map = { seq: tuple((tuple(chord) for chord in variants)) for seq, variants in esc.items() }
+
 csi_sequence = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
-char_sequence = r'(?:(?P<esc>\^\[)?(?P<ctrl>\^)?)(?:\\\\\\(?P<slash>\\)|\\(?P<escchar>.)|(?P<char>.))'
+char_sequence = r'(?:(?P<esc>\^\[)?(?P<ctrl>\^)?)(?:\\\\\\(?P<slash>\\)|\\(?P<escaped_char>.)|(?P<char>.))'
 esc_sequence = fr"^(?:{csi_sequence}|{char_sequence})"
 esc_pattern = re.compile(esc_sequence)
 
-@dataclass
-class MatchedKeyChord:
-    match: re.Match
-    chord: KeyChord
+def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
+    if csi_trailer := m["csi_trailer"]:
+        csi_key, csi_mod = int(m["csi_key"] or "1"), int(m["csi_mod"] or "0")
+        if key := csi.get((csi_key, csi_trailer)):
+            return tuple(
+                [ mod for mod_bit, mod in csi_mod_bits.items() if csi_mod > 0 and (csi_mod - 1) & (1 << mod_bit) != 0 ] + 
+                [ key ]
+            )
+    else:
+        ch: str
+        return tuple(filter(None, (
+            m["ctrl"] and "Ctrl",
+            m["esc"] and "Alt",
+            next(("Space" if ch == " " else ch.upper() for g in ["slash", "escaped_char", "char"] if (ch := m[g]) )
+        ))))
 
+MatchedKeyChord = NamedTuple("MatchedKeyChord", [("match", re.Match), ("chord", KeyChord)])
 def parse_escape_chord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
-    m = esc_pattern.search(seq) if partial else esc_pattern.fullmatch(seq)
-    if not m:
-        return None
+    if (m := esc_pattern.search(seq) if partial else esc_pattern.fullmatch(seq)) and (chord := get_chord_from_match(m)):
+        return MatchedKeyChord(m, chord)
 
-    csi_trailer = m["csi_trailer"]
-
-    if not csi_trailer:
-        return MatchedKeyChord(m, tuple(filter(None, (
-            "Ctrl" if m["ctrl"] else None,
-            "Alt" if m["esc"] else None,
-            next(("Space" if ch == " " else ch.upper() for g in ["slash", "escchar", "char"] if (ch := m[g]) )
-        )))))
-
-    csi_key = int(m["csi_key"] or "1")
-    csi_mod = int(m["csi_mod"] or "0")
-    key = csi.get((csi_key, csi_trailer), None)
-    if not key:
-        return None
-    
-    mods = [ mod for mod_bit, mod in csi_mod_bits.items() if csi_mod and (csi_mod - 1) & (1 << mod_bit) != 0 ] 
-    return MatchedKeyChord(m, tuple(mods + [ key ]))
-    
-@dataclass
-class EscLookup:
-    seq: str
-    chords: list[list[str]]
-
+EscLookup = NamedTuple("EscLookup", [("seq", str), ("chords", list[KeyChord])])
 def lookup_esc_map(seq: str) -> Optional[EscLookup]:
     while seq:
-        chords = esc.get(seq, None)
-        if chords:
+        if chords := esc_map.get(seq):
             return EscLookup(seq, chords)
         seq = seq[:-1]
 
 def parse_escape_sequence(seq: str) -> Optional[KeySequence]:
-    result = []
+    result: list[KeyVariant] = []
     while seq:
-        esc_lookup = lookup_esc_map(seq)
-        if esc_lookup: # subsequence found in lookup table
-            result.append(frozenset([ tuple(chord) for chord in esc_lookup.chords]))
-            seq = seq[len(esc_lookup.seq):]
-        else:
-            if not (p := parse_escape_chord(seq, True)):
-                return None
-            result.append(frozenset((p.chord,)))
+        if l := lookup_esc_map(seq):
+            result.append(l.chords)
+            seq = seq[len(l.seq):]
+        elif p := parse_escape_chord(seq, True):
+            result.append((p.chord,))
             seq = seq[p.match.end():]
+        else:
+            return None
     return tuple(result)
-
-def format_key(key: str):
-    return f"<kbd>{key}</kbd>"
-
-def format_esc(esc: str):
-    return f"`{esc}`"
-
-def format_chord(chord: KeyChord) -> str:
-    return "+".join(map(format_key, chord))
-
-def format_variants(variants: KeyVariant) -> str:
-    return " | ".join(map(format_chord, variants))
-
-def format_sequence(seq: Optional[KeySequence]) -> str:
-    if seq:
-        return ", ".join(map(format_variants, seq))
-    else:
-        return "Unknown key"
-
-def format_binding(seq: Optional[KeySequence], escapes: Iterable[str]) -> str:
-    return f"* {format_sequence(seq)} ({', '.join(map(format_esc, escapes))})"
-
-def format_escapes(escapes: Iterable[str]) -> str:
-    grouped_keys = groupby(escapes, key=parse_escape_sequence)
-    return "\n".join([ format_binding(seq, esc) for seq, esc in grouped_keys ])

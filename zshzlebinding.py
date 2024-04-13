@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import sys
 from typing import Optional
 import subprocess
 from enum import Enum, auto
@@ -14,7 +13,7 @@ class ZshZleBinding:
     key: str
     key_end: Optional[str]
     text: str
-    command: bool\
+    command: bool
 
 def q(name: str):
     return fr'(?:"(?P<{name}>(?:\.|.)*?)")'
