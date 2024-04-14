@@ -21,10 +21,13 @@ class ZshZleKeyBinding:
     """descriptor"""
 
 def skip_binding(b: ZshZleAction) -> bool:
-    return not b.command and (b.text == "self-insert" or b.text.startswith("_"))
+    return (b.text == "self-insert" or b.text.startswith("_")) and not b.command 
+
+command_action_desc = ZshZleDescriptor("Commands", "")
+default_action_desc = ZshZleDescriptor("Unknown", "!!! NO DESCRIPTION !!!")
 
 def get_zshzle_action_desc(action: ZshZleAction, widgets: dict[str, ZshZleDescriptor]) -> ZshZleDescriptor:
-    return ZshZleDescriptor("Command", "") if action.command else widgets.get(action.text, ZshZleDescriptor("Unknown", "!!! NO DESCRIPTION !!!"))
+    return command_action_desc if action.command else widgets.get(action.text, default_action_desc)
 
 def make_zshzle_key_binding(binding: ZshZleBinding, widgets: dict[str, ZshZleDescriptor]) -> ZshZleKeyBinding:
     return ZshZleKeyBinding(

@@ -24,7 +24,7 @@ def parse_zshzle_binding(binding: str) -> ZshZleBinding:
         ZshZleAction(m["widget"], False) if m["widget"] else ZshZleAction(m["command"], True)
     )
 
-def get_zshzle_bindings() -> Iterator[ZshZleBinding]:
+def get_zshzle_bindings():
     binding_strings = subprocess.run(
         ["zsh", "-c", ". ~/.zshrc && bindkey"], 
         capture_output=True, 
