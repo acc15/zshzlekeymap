@@ -4,7 +4,7 @@ import subprocess
 import re
 import json
 
-ZshZleDescriptor = NamedTuple("ZshZleWidget", [("section", str), ("description", str)])
+ZshZleDescriptor = NamedTuple("ZshZleDescriptor", [("section", str), ("description", str)])
 
 class ZshZleManHTMLParser(HTMLParser):
 
@@ -20,7 +20,7 @@ class ZshZleManHTMLParser(HTMLParser):
     section: Optional[str] = None
     """STANDARD WIDGETS > h3 > text"""
 
-    specs: Optional[list[str]] = None 
+    specs: list[str] = [] 
     """STANDARD WIDGETS > p[style=margin-left=9%] > all text in any nested tags"""
 
     description: Optional[str] = None
@@ -40,20 +40,20 @@ class ZshZleManHTMLParser(HTMLParser):
             self.specs.append("")
             return
         
-        if tag == "p" and any([ k == "style" and v.startswith("margin-left:9%;") for (k, v) in attrs ]):
-            self.specs = [""]
+        if tag == "p" and not self.specs and has_style(attrs, "margin-left:9%;"):
+            self.specs.append("")
             return
         
-        if tag == "p" and self.specs and any([ k == "style" and v.startswith("margin-left:18%;") for (k, v) in attrs ]):
+        if tag == "p" and self.specs and has_style(attrs, "margin-left:18%;"):
             self.description = ""
             return
 
     def handle_endtag(self, tag):
         self.h2 = False
         self.sw_h3 = False
-        if self.description != None and tag == "p":
-            self.process()
-            self.specs = None
+        if tag == "p" and self.section and self.description:
+            self.process(self.section, self.description)
+            self.specs.clear()
             self.description = None
 
     def handle_data(self, data: str) -> None:
@@ -62,17 +62,20 @@ class ZshZleManHTMLParser(HTMLParser):
             self.section = None
         elif self.sw_h3:
             self.section = data.strip()
-        elif self.description != None:
+        elif self.description is not None:
             self.description += data
         elif self.specs:
             self.specs[-1] += data
 
-    def process(self):
-        description = fix_ws(self.description)
+    def process(self, section: str, description: str):
+        description = fix_ws(description)
         for spec in self.specs:
             widget = parse_widget_from_spec(fix_ws(spec))
             if widget:
-                self.widgets[widget] = ZshZleDescriptor(self.section, description)
+                self.widgets[widget] = ZshZleDescriptor(section, description)
+
+def has_style(attrs, str: str):
+    return any([ k == "style" and str in v for k, v in attrs ])
 
 def fix_ws(str: str):
     stripped = str.strip()
@@ -89,7 +92,7 @@ def get_zshzle_standard_widgets() -> dict[str, ZshZleDescriptor]:
 
 def get_zshzle_aux_widgets() -> dict[str, ZshZleDescriptor]:
     with open("aux_widgets.json") as f:
-        data: dict[str, object] = json.load(f)
+        data: dict[str, dict[str, str]] = json.load(f)
     return { k: ZshZleDescriptor(**v) for k, v in data.items() }
     
 def get_zshzle_widgets():

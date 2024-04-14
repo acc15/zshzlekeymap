@@ -1,5 +1,5 @@
 import re
-from typing import NamedTuple, Optional
+from typing import Iterable, NamedTuple, Optional
 
 KeyChord = tuple[str,...]
 KeyVariant = tuple[KeyChord,...]
@@ -46,30 +46,31 @@ modifiers = [
     ("Shift", 0)
 ]
 
-esc = {
-    "^M": [["Enter"], ["Ctrl", "M"]],
-    "^I": [["Tab"], ["Ctrl", "I"]],
-    "^[[Z": [["Shift", "Tab"]],
-    "^?": [["Backspace"]],
-    "^[^?": [["Alt", "Backspace"]],
-    "^H": [["Ctrl", "Backspace"]],
-    "^[^H": [["Ctrl", "Alt", "Backspace"]],
-    "^[^_": [["Ctrl", "Alt", "/"]],
-    "^_": [["Ctrl", "/"]],
-    "^[OA": [["Up"]],
-    "^[OB": [["Down"]],
-    "^[OC": [["Right"]],
-    "^[OD": [["Left"]],
-    "^[OE": [["KpBegin"]],
-    "^[OF": [["End"]],
-    "^[OH": [["Home"]],
-    "^[OP": [["F1"]],
-    "^[OQ": [["F2"]],
-    "^[OR": [["F3"]],
-    "^[OS": [["F4"]]
-}
+def kv(*args: list[str]):
+    return KeyVariant(map(KeyChord, args)) 
 
-esc_map = { seq: tuple((tuple(chord) for chord in variants)) for seq, variants in esc.items() }
+esc = {
+    "^M": kv(["Enter"], ["Ctrl", "M"]),
+    "^I": kv(["Tab"], ["Ctrl", "I"]),
+    "^[[Z": kv(["Shift", "Tab"]),
+    "^?": kv(["Backspace"]),
+    "^[^?": kv(["Alt", "Backspace"]),
+    "^H": kv(["Ctrl", "Backspace"]),
+    "^[^H": kv(["Ctrl", "Alt", "Backspace"]),
+    "^[^_": kv(["Ctrl", "Alt", "/"]),
+    "^_": kv(["Ctrl", "/"]),
+    "^[OA": kv(["Up"]),
+    "^[OB": kv(["Down"]),
+    "^[OC": kv(["Right"]),
+    "^[OD": kv(["Left"]),
+    "^[OE": kv(["KpBegin"]),
+    "^[OF": kv(["End"]),
+    "^[OH": kv(["Home"]),
+    "^[OP": kv(["F1"]),
+    "^[OQ": kv(["F2"]),
+    "^[OR": kv(["F3"]),
+    "^[OS": kv(["F4"])
+}
 
 csi_sequence = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
 char_sequence = r'(?:(?P<esc>\^\[)?(?P<ctrl>\^)?)(?:\\\\\\(?P<slash>\\)|\\(?P<escaped_char>.)|(?P<char>.))'
@@ -79,11 +80,10 @@ esc_pattern = re.compile(esc_sequence)
 def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
     if csi_trailer := m["csi_trailer"]:
         csi_key, csi_mod = int(m["csi_key"] or "1"), int(m["csi_mod"] or "0")
-        if key := csi.get((csi_key, csi_trailer)):
-            return tuple(
-                [ mod for mod, bit in modifiers if csi_mod > 0 and (csi_mod - 1) & (1 << bit) != 0 ] + 
-                [ key ]
-            )
+        return tuple(
+            [ mod for mod, bit in modifiers if csi_mod > 0 and (csi_mod - 1) & (1 << bit) != 0 ] + 
+            [ key ]
+        ) if (key := csi.get((csi_key, csi_trailer))) else None
     else:
         ch: str
         return tuple(filter(None, (
@@ -94,22 +94,25 @@ def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
 
 MatchedKeyChord = NamedTuple("MatchedKeyChord", [("match", re.Match), ("chord", KeyChord)])
 def parse_escape_chord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
-    if (m := esc_pattern.search(seq) if partial else esc_pattern.fullmatch(seq)) and (chord := get_chord_from_match(m)):
-        return MatchedKeyChord(m, chord)
+    return (MatchedKeyChord(m, chord) if 
+        (m := esc_pattern.search(seq) if partial else esc_pattern.fullmatch(seq)) and 
+        (chord := get_chord_from_match(m))
+    else None)
 
-EscLookup = NamedTuple("EscLookup", [("seq", str), ("chords", list[KeyChord])])
+EscLookup = NamedTuple("EscLookup", [("escape", str), ("variant", KeyVariant)])
 def lookup_esc_map(seq: str) -> Optional[EscLookup]:
     while seq:
-        if chords := esc_map.get(seq):
+        if chords := esc.get(seq):
             return EscLookup(seq, chords)
         seq = seq[:-1]
+    return None
 
 def parse_escape_sequence(seq: str) -> Optional[KeySequence]:
     result: list[KeyVariant] = []
     while seq:
         if l := lookup_esc_map(seq):
-            result.append(l.chords)
-            seq = seq[len(l.seq):]
+            result.append(l.variant)
+            seq = seq[len(l.escape):]
         elif p := parse_escape_chord(seq, True):
             result.append((p.chord,))
             seq = seq[p.match.end():]

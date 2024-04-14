@@ -1,0 +1,29 @@
+html,body { 
+    font-family: Intel, Helvetica, sans-serif;
+}
+
+td {
+    vertical-align: top;
+    border-top: 1px solid lightgray;
+}
+
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+}
+
+h4 { 
+    margin: 0; 
+}
+
+@media screen {
+    kbd {
+        background-color: #eeeeee;
+        border-radius: 5px;
+        border: 1px solid lightgray;
+        padding: 2px;
+    }
+    .keys {
+        line-height: 25px;
+    }        
+}
