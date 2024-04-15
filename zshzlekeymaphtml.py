@@ -11,16 +11,16 @@ def generate_html():
     bindings = sorted(get_zshzle_key_bindings(), key = attrgetter("desc.section", "action", "keys"))
     with open("keys.html", "w") as f:
         f.write(
-            "<!DOCTYPE html><html><head>"
-            "<title>ZshZle bindings</title>"
-            "<link href=\"keys.css\" rel=\"stylesheet\"/>"
-            "</head><body><table>"
-            "<thead><tr><th>Keys</th><th>Action</th><th>Description</th></thead>"
-            "<tbody>"
+            '<!DOCTYPE html><html><head>'
+            '<title>ZshZle bindings</title>'
+            '<link href="keys.css" rel="stylesheet"/>'
+            '</head><body><table>'
+            '<thead><tr><th id="keys">Keys</th><th id="action">Action</th><th id="description">Description</th></thead>'
+            '<tbody>'
         )
 
         fmt = KeysFormatter(
-            Wrappers(chord=html_wrap("kbd"), escape=html_wrap("code"), line=html_wrap("div", [("class", "keys")])), 
+            Wrappers(key=html_wrap("kbd"), escape=html_wrap("code"), line=html_wrap("div", [("class", "keys")])), 
             Separators(line="")
         )
 

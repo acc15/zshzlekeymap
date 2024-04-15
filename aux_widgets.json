@@ -1,6 +1,22 @@
 {
-    "_correct_filename": {
-        "section": "Debug",
-        "description": "Function to correct a filename. Can be used as a completion widget, or as a function in its own right, in which case it will print the corrected filename to standard output."
+    "copybuffer": {
+        "section": "Miscellaneous",
+        "description": "Copies buffer to clipboard"
+    },
+    "copycwd": {
+        "section": "Miscellaneous",
+        "description": "Copies current working directory to clipboard"
+    },
+    "edit-command-line": {
+        "section": "Miscellaneous",
+        "description": "Allows to edit current buffer using default text editor (see $EDITOR)"
+    },
+    "down-line-or-beginning-search": {
+        "section": "History Control",
+        "description": "Move down a line in the buffer, or if already at the bottom line, search forward in the history for a line beginning with the first word in the buffer. Like down-line-or-search, but uses the whole line prefix up to the cursor position for searching forwards."
+    },
+    "up-line-or-beginning-search": {
+        "section": "History Control",
+        "description": "Move up a line in the buffer, or if already at the top line, search backward in the history for a line beginning with the first word in the buffer. Like up-line-or-search, but uses the whole line prefix up to the cursor position for searching backwards."
     }
 }

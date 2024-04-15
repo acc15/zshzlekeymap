@@ -16,6 +16,10 @@ h4 {
     margin: 0; 
 }
 
+.keys {
+    white-space: nowrap;
+}
+
 @media screen {
     kbd {
         background-color: #eeeeee;
