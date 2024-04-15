@@ -1,5 +1,6 @@
+import itertools
 import re
-from typing import Iterable, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 KeyChord = tuple[str,...]
 KeyVariant = tuple[KeyChord,...]
@@ -73,24 +74,23 @@ esc = {
 }
 
 csi_sequence = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
-char_sequence = r'(?:(?P<esc>\^\[)?(?P<ctrl>\^)?)(?:\\\\\\(?P<slash>\\)|\\(?P<escaped_char>.)|(?P<char>.))'
+char_sequence = r'(?:(?P<alt>\^\[)|(?P<meta>\\M\-))?(?P<ctrl>\^)?(?:\\\\\\(?P<slash>\\)|\\(?P<esc>.)|(?P<char>.))'
 esc_sequence = fr"^(?:{csi_sequence}|{char_sequence})"
 esc_pattern = re.compile(esc_sequence)
 
 def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
     if csi_trailer := m["csi_trailer"]:
-        csi_key, csi_mod = int(m["csi_key"] or "1"), int(m["csi_mod"] or "0")
+        csi_key, csi_mod = int(m["csi_key"] or "1"), int(m["csi_mod"] or "1") - 1
         return tuple(
-            [ mod for mod, bit in modifiers if csi_mod > 0 and (csi_mod - 1) & (1 << bit) != 0 ] + 
-            [ key ]
+            [mod for mod, bit in modifiers if csi_mod & (1 << bit) != 0] + 
+            [key]
         ) if (key := csi.get((csi_key, csi_trailer))) else None
     else:
         ch: str
-        return tuple(filter(None, (
-            m["ctrl"] and "Ctrl",
-            m["esc"] and "Alt",
-            next(("Space" if ch == " " else ch.upper() for g in ["slash", "escaped_char", "char"] if (ch := m[g]) )
-        ))))
+        return tuple(
+            [mod.capitalize() for mod in ["meta", "ctrl", "alt"] if m[mod]] + 
+            [next(("Space" if ch == " " else ch.upper() for g in ["slash", "esc", "char"] if (ch := m[g])))]
+        )
 
 MatchedKeyChord = NamedTuple("MatchedKeyChord", [("match", re.Match), ("chord", KeyChord)])
 def parse_escape_chord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
@@ -107,15 +107,15 @@ def lookup_esc_map(seq: str) -> Optional[EscLookup]:
         seq = seq[:-1]
     return None
 
-def parse_escape_sequence(seq: str) -> Optional[KeySequence]:
+def parse_escape_sequence(esc: str) -> Optional[KeySequence]:
     result: list[KeyVariant] = []
-    while seq:
-        if l := lookup_esc_map(seq):
+    while esc:
+        if l := lookup_esc_map(esc):
             result.append(l.variant)
-            seq = seq[len(l.escape):]
-        elif p := parse_escape_chord(seq, True):
+            esc = esc[len(l.escape):]
+        elif p := parse_escape_chord(esc, True):
             result.append((p.chord,))
-            seq = seq[p.match.end():]
+            esc = esc[p.match.end():]
         else:
             return None
     return tuple(result)

@@ -1,4 +1,4 @@
-html,body { 
+html, body { 
     font-family: Intel, Helvetica, sans-serif;
 }
 
@@ -8,8 +8,8 @@ td {
 }
 
 table { 
-    width: 100%; 
     border-collapse: collapse; 
+    width: 100%; 
 }
 
 h4 { 
@@ -20,6 +20,10 @@ h4 {
     white-space: nowrap;
 }
 
+kbd {
+    font-family: monospace;
+}
+
 @media screen {
     kbd {
         background-color: #eeeeee;
@@ -27,7 +31,8 @@ h4 {
         border: 1px solid lightgray;
         padding: 2px;
     }
+
     .keys {
-        line-height: 25px;
+        margin: 10px 0;
     }        
 }
