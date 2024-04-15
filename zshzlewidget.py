@@ -4,7 +4,9 @@ import subprocess
 import re
 import json
 
-ZshZleDescriptor = NamedTuple("ZshZleDescriptor", [("section", str), ("description", str)])
+class ZshZleDescriptor(NamedTuple):
+    section: str
+    description: str
 
 class ZshZleManHTMLParser(HTMLParser):
 

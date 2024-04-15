@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 keymap=test
-output=bindkey_test.txt
+output=/tmp/bindkey_test.txt
 
 : > $output
 for (( i = 0x00; i <= 0xff; i++ )); do
@@ -12,3 +12,5 @@ for (( i = 0x00; i <= 0xff; i++ )); do
     printf "0x%s = %s\n" $hex $code >> $output
 done
 bindkey -D $keymap
+
+eval $EDITOR $output

@@ -1,10 +1,23 @@
-import itertools
 import re
 from typing import NamedTuple, Optional
 
 KeyChord = tuple[str,...]
-KeyVariant = tuple[KeyChord,...]
-KeySequence = tuple[KeyVariant,...]
+KeyVariants = tuple[KeyChord,...]
+KeySeq = tuple[KeyVariants,...]
+
+class EscKeySeq(NamedTuple):
+    esc: str
+    seq: KeySeq
+
+EscKeySeqs = tuple[EscKeySeq,...]
+
+class MatchedKeyChord(NamedTuple):
+    match: re.Match
+    chord: KeyChord
+
+class EscLookup(NamedTuple):
+    esc: str
+    variants: KeyVariants
 
 csi = {
     (27, 'u'): "Escape",
@@ -48,7 +61,7 @@ modifiers = [
 ]
 
 def kv(*args: list[str]):
-    return KeyVariant(map(KeyChord, args)) 
+    return KeyVariants(map(KeyChord, args)) 
 
 esc = {
     "^M": kv(["Enter"], ["Ctrl", "M"]),
@@ -92,14 +105,12 @@ def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
             [next(("Space" if ch == " " else ch.upper() for g in ["slash", "esc", "char"] if (ch := m[g])))]
         )
 
-MatchedKeyChord = NamedTuple("MatchedKeyChord", [("match", re.Match), ("chord", KeyChord)])
-def parse_escape_chord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
+def parse_keychord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
     return (MatchedKeyChord(m, chord) if 
         (m := esc_pattern.search(seq) if partial else esc_pattern.fullmatch(seq)) and 
         (chord := get_chord_from_match(m))
     else None)
 
-EscLookup = NamedTuple("EscLookup", [("escape", str), ("variant", KeyVariant)])
 def lookup_esc_map(seq: str) -> Optional[EscLookup]:
     while seq:
         if chords := esc.get(seq):
@@ -107,15 +118,21 @@ def lookup_esc_map(seq: str) -> Optional[EscLookup]:
         seq = seq[:-1]
     return None
 
-def parse_escape_sequence(esc: str) -> Optional[KeySequence]:
-    result: list[KeyVariant] = []
+def parse_keyseq(esc: str) -> KeySeq:
+    result: list[KeyVariants] = []
     while esc:
         if l := lookup_esc_map(esc):
-            result.append(l.variant)
-            esc = esc[len(l.escape):]
-        elif p := parse_escape_chord(esc, True):
+            result.append(l.variants)
+            esc = esc[len(l.esc):]
+        elif p := parse_keychord(esc, True):
             result.append((p.chord,))
             esc = esc[p.match.end():]
         else:
-            return None
-    return tuple(result)
+            return KeySeq() # empty tuple if can't parse
+    return KeySeq(result)
+
+def parse_esckeyseq(esc_first: str, esc_last: Optional[str]) -> EscKeySeqs:
+    if not esc_last:
+        return (EscKeySeq(esc_first, parse_keyseq(esc_first)),)
+
+    return ()

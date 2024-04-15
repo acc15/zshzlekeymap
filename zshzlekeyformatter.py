@@ -1,9 +1,7 @@
 import html
-import itertools
-from operator import attrgetter
-from typing import Callable, Iterable, NamedTuple, Optional
-from zshzlekey import KeyChord, KeySequence, KeyVariant
-from zshzlekeybinding import ZshZleKeyBinding
+from typing import Callable, Iterable, NamedTuple
+from zshzlekey import KeyChord, KeySeq, KeyVariants
+from zshzlekeybinding import EscKeySeqGroup, ZshZleKeyBinding
 
 WrapFunction = Callable[[str], str] 
 
@@ -39,20 +37,22 @@ class KeysFormatter:
         self.wrap = wrap
         self.sep = sep
     
-    def format_chord(self, chord: KeyChord) -> str:
+    def format_keychord(self, chord: KeyChord) -> str:
         return self.wrap.chord(self.sep.chord.join(map(self.wrap.key, chord)))
 
-    def format_variants(self, variants: KeyVariant) -> str:
-        return self.wrap.variants(self.sep.variants.join(map(self.format_chord, variants)))
+    def format_keyvariants(self, variants: KeyVariants) -> str:
+        return self.wrap.variants(self.sep.variants.join(map(self.format_keychord, variants)))
 
-    def format_keys(self, keys: Optional[KeySequence]) -> str:
-        return self.wrap.sequence(self.sep.sequence.join(map(self.format_variants, keys)) if keys else "Unknown key")
+    def format_keyseq(self, keys: KeySeq) -> str:
+        seq = self.sep.sequence.join(map(self.format_keyvariants, keys)) if keys else "Unknown key"
+        return self.wrap.sequence(seq)
 
-    def format_keys_with_escapes(self, keys: Optional[KeySequence], escapes: Iterable[str]) -> str:
-        return self.wrap.line(f"{self.format_keys(keys)} ({self.sep.escape.join(map(self.wrap.escape, escapes))})")
+    def format_esckeyseqgroup(self, group: EscKeySeqGroup) -> str:
+        line = f"{self.format_keyseq(group.seq)} ({self.sep.escape.join(map(self.wrap.escape, group.esc))})"
+        return self.wrap.line(line)
 
-    def format_binding_keys(self, bindings: Iterable[ZshZleKeyBinding]) -> str:
-        return self.sep.line.join((
-            self.format_keys_with_escapes(keys, map(attrgetter("escape"), keys_bindings)) 
-            for keys, keys_bindings in itertools.groupby(bindings, key=attrgetter("keys")) 
-        ))
+    def format_esckeyseqgroups(self, groups: Iterable[EscKeySeqGroup]) -> str:
+        return self.sep.line.join(map(self.format_esckeyseqgroup, groups))
+    
+    def format_binding_keys(self, binding: ZshZleKeyBinding) -> str:
+        return self.format_esckeyseqgroups(binding.keys)

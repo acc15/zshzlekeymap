@@ -1,12 +1,12 @@
-from dataclasses import dataclass
-from typing import Iterator, NamedTuple, Optional
+from typing import NamedTuple, Optional
 import subprocess
 import re
 
-ZshZleAction = NamedTuple("ZshZleAction", [("text", str), ("command", bool)])
+class ZshZleAction(NamedTuple):
+    text: str
+    command: bool
 
-@dataclass(frozen=True)
-class ZshZleBinding:
+class ZshZleBinding(NamedTuple):
     key: str
     key_end: Optional[str]
     action: ZshZleAction

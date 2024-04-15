@@ -10,5 +10,5 @@ class ZshZleKeyTests(unittest.TestCase):
         ]
         for esc, expected_chord in examples:
             with self.subTest(esc = esc):
-                m = zshzlekey.parse_escape_chord(esc, False)
+                m = zshzlekey.parse_keychord(esc, False)
                 self.assertEqual(m.chord, expected_chord) if m else self.assertIsNone(expected_chord)

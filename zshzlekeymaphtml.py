@@ -1,14 +1,16 @@
 import itertools
-from operator import attrgetter
-from typing_extensions import override
 
-from zshzlebinding import ZshZleAction
 from zshzlekeybinding import get_zshzle_key_bindings
 from zshzlekeyformatter import KeysFormatter, Separators, Wrappers, html_wrap
 
 def generate_html():
     
-    bindings = sorted(get_zshzle_key_bindings(), key = attrgetter("desc.section", "action", "keys"))
+    bindings = get_zshzle_key_bindings()
+    fmt = KeysFormatter(
+        Wrappers(key=html_wrap("kbd"), escape=html_wrap("code"), line=html_wrap("div", [("class", "keys")])), 
+        Separators(line="")
+    )
+
     with open("keys.html", "w") as f:
         f.write(
             '<!DOCTYPE html><html><head>'
@@ -19,21 +21,14 @@ def generate_html():
             '<tbody>'
         )
 
-        fmt = KeysFormatter(
-            Wrappers(key=html_wrap("kbd"), escape=html_wrap("code"), line=html_wrap("div", [("class", "keys")])), 
-            Separators(line="")
-        )
-
-        for section, section_bindings in itertools.groupby(bindings, key = attrgetter("desc.section")):
+        for section, section_bindings in itertools.groupby(bindings, key = lambda b: b.desc.section):
             f.write(f'<tr><td colspan="3"><h4>{section}</h4></td></tr>')
 
-            action: ZshZleAction
-            for action, action_bindings in itertools.groupby(section_bindings, key = attrgetter("action")):
-                b = list(action_bindings)
+            for binding in section_bindings:
                 f.write('<tr>'
-                        f'<td>{fmt.format_binding_keys(b)}</td>'
-                        f'<td><code>{action.text}</code></td>'
-                        f'<td>{b[0].desc.description}</td>'
+                        f'<td>{fmt.format_binding_keys(binding)}</td>'
+                        f'<td><code>{binding.action.text}</code></td>'
+                        f'<td>{binding.desc.description}</td>'
                         '</tr>')
 
         f.write("</tbody></table></body></html>")
