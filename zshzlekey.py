@@ -86,10 +86,17 @@ esc = {
     "^[OS": kv(["F4"])
 }
 
-csi_sequence = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
-char_sequence = r'(?:(?P<alt>\^\[)|(?P<meta>\\M\-))?(?P<ctrl>\^)?(?:\\\\\\(?P<slash>\\)|\\(?P<esc>.)|(?P<char>.))'
-esc_sequence = fr"^(?:{csi_sequence}|{char_sequence})"
-esc_pattern = re.compile(esc_sequence)
+csi_group = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
+meta_group = r'(?P<meta>\\M\-)'
+alt_meta_group = fr'(?:(?P<alt>\^\[)|{meta_group})'
+char_group = r'(?:\\\\\\(?P<slash>\\)|\\(?P<esc>.)|(?P<char>.))'
+ctrl_char_group = fr'(?P<ctrl>\^)?{char_group}'
+
+esc_pattern = re.compile(fr'^(?:{csi_group}|(?:{alt_meta_group}?{ctrl_char_group}))')
+char_pattern = re.compile(fr'^{meta_group}?{ctrl_char_group}')
+
+def get_char_from_match(m: re.Match) -> str:
+    return next(ch for g in ["slash", "esc", "char"] if (ch := m[g]))
 
 def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
     if csi_trailer := m["csi_trailer"]:
@@ -99,10 +106,9 @@ def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
             [key]
         ) if (key := csi.get((csi_key, csi_trailer))) else None
     else:
-        ch: str
         return tuple(
             [mod.capitalize() for mod in ["meta", "ctrl", "alt"] if m[mod]] + 
-            [next(("Space" if ch == " " else ch.upper() for g in ["slash", "esc", "char"] if (ch := m[g])))]
+            ["Space" if (ch := get_char_from_match(m)) == " " else ch.upper()]
         )
 
 def parse_keychord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
@@ -131,8 +137,44 @@ def parse_keyseq(esc: str) -> KeySeq:
             return KeySeq() # empty tuple if can't parse
     return KeySeq(result)
 
+def parse_char_esc(esc: str) -> Optional[int]:
+    if m := char_pattern.fullmatch(esc):
+        meta, ctrl, char = m["meta"] and 0x80 or 0, m["ctrl"] and 0x40 or 0, get_char_from_match(m)
+        return (0x7F if ctrl and char == '?' else ord(char) - ctrl) | meta 
+    else:
+        return None
+
+chars_to_escape = frozenset(['^', '`', '"', '$', '\\'])
+
+def format_char_esc(code: int) -> str:
+    esc = ""
+    if code & 0x80:
+        code -= 0x80
+        esc += "\\M-"
+
+    if code == 0x7F:
+        return esc + "^?"
+    
+    if code < 0x20:
+        code += 0x40
+        esc += "^"
+    
+    ch = chr(code)
+    if ch in chars_to_escape:
+        esc += "\\"
+    
+    if ch == '\\':
+        esc += "\\\\"
+        
+    esc += ch
+    return esc
+
 def parse_esckeyseq(esc_first: str, esc_last: Optional[str]) -> EscKeySeqs:
     if not esc_last:
         return (EscKeySeq(esc_first, parse_keyseq(esc_first)),)
-
-    return ()
+    
+    start, end = parse_char_esc(esc_first), parse_char_esc(esc_last)
+    if start is None or end is None:
+        return (EscKeySeq(f'"{esc_first}"-"{esc_last}"', KeySeq()),)
+    
+    return tuple(EscKeySeq(esc := format_char_esc(code), parse_keyseq(esc)) for code in range(start, end + 1))

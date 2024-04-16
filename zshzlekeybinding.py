@@ -19,13 +19,8 @@ class EscKeySeqGroup(NamedTuple):
 
 class ZshZleKeyBinding(NamedTuple):
     action: ZshZleAction
-    """binding action, command or widget"""
-
     desc: ZshZleDescriptor
-    """action descriptor"""
-
     keys: tuple[EscKeySeqGroup, ...]
-    """found escapes and detected key sequences"""
 
 def skip_binding(b: ZshZleAction) -> bool:
     return (b.text == "self-insert" or b.text.startswith("_")) and not b.command 
