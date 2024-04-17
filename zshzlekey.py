@@ -4,7 +4,7 @@ import enum
 import functools
 import itertools
 import re
-from typing import Callable, Iterator, NamedTuple, Optional
+from typing import Callable, NamedTuple, Optional
 
 class KeyMod(enum.Flag):
     SHIFT = enum.auto()
