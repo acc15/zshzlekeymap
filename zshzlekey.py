@@ -4,7 +4,7 @@ import enum
 import functools
 import itertools
 import re
-from typing import Callable, NamedTuple, Optional
+from typing import Callable, Iterator, NamedTuple, Optional
 
 class KeyMod(enum.Flag):
     SHIFT = enum.auto()
@@ -88,19 +88,26 @@ csi = {
 def kv(*args: KeyChord):
     return KeyVars(args) 
 
-def kc(key: str, mods = KeyMod(0)):
-    return KeyChord(mods, key)
+def kc(*keys: KeyMod | str):
+    mod = KeyMod(0)
+    key = ""
+    for k in keys:
+        if isinstance(k, KeyMod):
+            mod |= k
+        else:
+            key = k
+    return KeyChord(mod, key)
 
 esc = {
-    "^M": kv(kc("Enter"), kc("M", KeyMod.CTRL)),
-    "^I": kv(kc("Tab"), kc("I", KeyMod.CTRL)),
-    "^[[Z": kv(kc("Tab", KeyMod.SHIFT)),
+    "^M": kv(kc("Enter"), kc(KeyMod.CTRL, "M")),
+    "^I": kv(kc("Tab"), kc(KeyMod.CTRL, "I")),
+    "^[[Z": kv(kc(KeyMod.SHIFT, "Tab")),
     "^?": kv(kc("Backspace")),
-    "^[^?": kv(kc("Backspace", KeyMod.ALT)),
-    "^H": kv(kc("Backspace", KeyMod.CTRL)),
-    "^[^H": kv(kc("Backspace", KeyMod.CTRL | KeyMod.ALT)),
-    "^[^_": kv(kc("/", KeyMod.CTRL | KeyMod.ALT)),
-    "^_": kv(kc("/", KeyMod.CTRL)),
+    "^[^?": kv(kc(KeyMod.ALT, "Backspace")),
+    "^H": kv(kc(KeyMod.CTRL, "Backspace")),
+    "^[^H": kv(kc(KeyMod.CTRL, KeyMod.ALT, "Backspace")),
+    "^[^_": kv(kc(KeyMod.CTRL, KeyMod.ALT, "/")),
+    "^_": kv(kc(KeyMod.CTRL, "/")),
     "^[OA": kv(kc("Up")),
     "^[OB": kv(kc("Down")),
     "^[OC": kv(kc("Right")),
