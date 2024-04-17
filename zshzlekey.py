@@ -133,7 +133,7 @@ def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
         return KeyChord(csi_mod, key) if key else None
     else:
         groups = m.groupdict()
-        mods = (mod for mod in KeyMod if mod.name and mod.name.lower() in groups and groups[mod.name.lower()])
+        mods = (mod for mod in KeyMod if mod.name and groups.get(mod.name.lower()))
         return KeyChord(
             functools.reduce(lambda a, b: a | b, mods, KeyMod(0)),
             "Space" if (ch := get_char_from_match(m)) == " " else ch.upper()
