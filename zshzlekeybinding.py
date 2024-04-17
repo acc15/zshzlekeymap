@@ -31,24 +31,21 @@ default_action_desc = ZshZleDescriptor("Unknown", "!!! NO DESCRIPTION !!!")
 def get_zshzle_action_desc(action: ZshZleAction, widgets: dict[str, ZshZleDescriptor]) -> ZshZleDescriptor:
     return command_action_desc if action.command else widgets.get(action.text, default_action_desc)
 
+def make_esckeyseq_group(group: Iterable[EscKeySeq]):
+    l = list(group)
+    return EscKeySeqGroup(l[0].seq, tuple((seq.esc for seq in l)))
+
 def make_zshzle_key_binding(group: Iterable[ZshZleDescBinding]) -> ZshZleKeyBinding:
     
     bindings = list(group)
     binding, desc = bindings[0]
 
-    def esckeyseq_key(k: EscKeySeq):
-        return k.seq
-
     keys = sorted(
         flatten(map(lambda b: parse_esckeyseq(b.binding.key, b.binding.key_end), bindings )), 
-        key = esckeyseq_key
+        key = lambda k: (len(k.seq), k.seq)
     )
 
-    key_groups = tuple((
-        EscKeySeqGroup(seq, tuple((seq.esc for seq in group))) 
-        for seq, group in itertools.groupby(keys, key = esckeyseq_key)
-    ))
-
+    key_groups = tuple(make_esckeyseq_group(group) for _, group in itertools.groupby(keys, key = lambda k: k.seq))
     return ZshZleKeyBinding(binding.action, desc, key_groups)
 
 def get_zshzle_key_bindings() -> Iterable[ZshZleKeyBinding]:

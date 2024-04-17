@@ -7,7 +7,7 @@ def generate_html():
     
     bindings = get_zshzle_key_bindings()
     fmt = KeysFormatter(
-        Wrappers(key=html_wrap("kbd"), escape=html_wrap("code"), line=html_wrap("div", [("class", "keys")])), 
+        Wrappers(key=html_wrap("kbd"), escape=html_wrap("code"), line=html_wrap("div", {"class":"keys"})), 
         Separators(line="")
     )
 
@@ -26,7 +26,7 @@ def generate_html():
 
             for binding in section_bindings:
                 f.write('<tr>'
-                        f'<td>{fmt.format_binding_keys(binding)}</td>'
+                        f'<td>{fmt.binding_keys(binding)}</td>'
                         f'<td><code>{binding.action.text}</code></td>'
                         f'<td>{binding.desc.description}</td>'
                         '</tr>')

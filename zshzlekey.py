@@ -1,9 +1,45 @@
-import re
-from typing import NamedTuple, Optional
+from __future__ import annotations
 
-KeyChord = tuple[str,...]
-KeyVariants = tuple[KeyChord,...]
-KeySeq = tuple[KeyVariants,...]
+import enum
+import functools
+import itertools
+import re
+from typing import Callable, NamedTuple, Optional
+
+class KeyMod(enum.Flag):
+    SHIFT = enum.auto()
+    ALT = enum.auto()
+    CTRL = enum.auto()
+    SUPER = enum.auto()
+    HYPER = enum.auto()
+    META = enum.auto()
+    CAPS_LOCK = enum.auto()
+    NUM_LOCK = enum.auto()
+
+    def format_single(self):
+        assert len(self) == 1 and self.name is not None
+        return " ".join(map(str.capitalize, self.name.split("_")))
+
+    def __lt__(self, other: KeyMod):
+        ls, lo = len(self), len(other)
+        return self.value < other.value if ls == lo else ls < lo
+
+class KeyChord(NamedTuple):
+    
+    mods: KeyMod
+    key: str
+
+    def __str__(self):
+        return self.format()
+
+    def format(self, wrap: Callable[[str], str] = lambda s: s, sep: str = " + "):
+        return sep.join(itertools.chain(
+            map(lambda mod: wrap(mod.format_single()), reversed(list(self.mods))), 
+            (wrap(self.key),)
+        ))
+
+KeyVars = tuple[KeyChord,...]
+KeySeq = tuple[KeyVars,...]
 
 class EscKeySeq(NamedTuple):
     esc: str
@@ -17,7 +53,7 @@ class MatchedKeyChord(NamedTuple):
 
 class EscLookup(NamedTuple):
     esc: str
-    variants: KeyVariants
+    variants: KeyVars
 
 csi = {
     (27, 'u'): "Escape",
@@ -49,41 +85,33 @@ csi = {
     (1, 'E'): "KpBegin"
 }
 
-modifiers = [
-    ("Num Lock", 7),
-    ("Caps Lock", 6),
-    ("Meta", 5),
-    ("Hyper", 4),
-    ("Super", 3),
-    ("Ctrl", 2),
-    ("Alt", 1),
-    ("Shift", 0)
-]
+def kv(*args: KeyChord):
+    return KeyVars(args) 
 
-def kv(*args: list[str]):
-    return KeyVariants(map(KeyChord, args)) 
+def kc(key: str, mods = KeyMod(0)):
+    return KeyChord(mods, key)
 
 esc = {
-    "^M": kv(["Enter"], ["Ctrl", "M"]),
-    "^I": kv(["Tab"], ["Ctrl", "I"]),
-    "^[[Z": kv(["Shift", "Tab"]),
-    "^?": kv(["Backspace"]),
-    "^[^?": kv(["Alt", "Backspace"]),
-    "^H": kv(["Ctrl", "Backspace"]),
-    "^[^H": kv(["Ctrl", "Alt", "Backspace"]),
-    "^[^_": kv(["Ctrl", "Alt", "/"]),
-    "^_": kv(["Ctrl", "/"]),
-    "^[OA": kv(["Up"]),
-    "^[OB": kv(["Down"]),
-    "^[OC": kv(["Right"]),
-    "^[OD": kv(["Left"]),
-    "^[OE": kv(["KpBegin"]),
-    "^[OF": kv(["End"]),
-    "^[OH": kv(["Home"]),
-    "^[OP": kv(["F1"]),
-    "^[OQ": kv(["F2"]),
-    "^[OR": kv(["F3"]),
-    "^[OS": kv(["F4"])
+    "^M": kv(kc("Enter"), kc("M", KeyMod.CTRL)),
+    "^I": kv(kc("Tab"), kc("I", KeyMod.CTRL)),
+    "^[[Z": kv(kc("Tab", KeyMod.SHIFT)),
+    "^?": kv(kc("Backspace")),
+    "^[^?": kv(kc("Backspace", KeyMod.ALT)),
+    "^H": kv(kc("Backspace", KeyMod.CTRL)),
+    "^[^H": kv(kc("Backspace", KeyMod.CTRL | KeyMod.ALT)),
+    "^[^_": kv(kc("/", KeyMod.CTRL | KeyMod.ALT)),
+    "^_": kv(kc("/", KeyMod.CTRL)),
+    "^[OA": kv(kc("Up")),
+    "^[OB": kv(kc("Down")),
+    "^[OC": kv(kc("Right")),
+    "^[OD": kv(kc("Left")),
+    "^[OE": kv(kc("KpBegin")),
+    "^[OF": kv(kc("End")),
+    "^[OH": kv(kc("Home")),
+    "^[OP": kv(kc("F1")),
+    "^[OQ": kv(kc("F2")),
+    "^[OR": kv(kc("F3")),
+    "^[OS": kv(kc("F4"))
 }
 
 csi_group = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
@@ -100,15 +128,15 @@ def get_char_from_match(m: re.Match) -> str:
 
 def get_chord_from_match(m: re.Match) -> Optional[KeyChord]:
     if csi_trailer := m["csi_trailer"]:
-        csi_key, csi_mod = int(m["csi_key"] or "1"), int(m["csi_mod"] or "1") - 1
-        return tuple(
-            [mod for mod, bit in modifiers if csi_mod & (1 << bit) != 0] + 
-            [key]
-        ) if (key := csi.get((csi_key, csi_trailer))) else None
+        csi_key, csi_mod = int(m["csi_key"] or "1"), KeyMod(int(m["csi_mod"] or "1") - 1)
+        key = csi.get((csi_key, csi_trailer))
+        return KeyChord(csi_mod, key) if key else None
     else:
-        return tuple(
-            [mod.capitalize() for mod in ["meta", "ctrl", "alt"] if m[mod]] + 
-            ["Space" if (ch := get_char_from_match(m)) == " " else ch.upper()]
+        groups = m.groupdict()
+        mods = (mod for mod in KeyMod if mod.name and mod.name.lower() in groups and groups[mod.name.lower()])
+        return KeyChord(
+            functools.reduce(lambda a, b: a | b, mods, KeyMod(0)),
+            "Space" if (ch := get_char_from_match(m)) == " " else ch.upper()
         )
 
 def parse_keychord(seq: str, partial: bool) -> Optional[MatchedKeyChord]:
@@ -125,7 +153,7 @@ def lookup_esc_map(seq: str) -> Optional[EscLookup]:
     return None
 
 def parse_keyseq(esc: str) -> KeySeq:
-    result: list[KeyVariants] = []
+    result: list[KeyVars] = []
     while esc:
         if l := lookup_esc_map(esc):
             result.append(l.variants)

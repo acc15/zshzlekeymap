@@ -1,14 +1,15 @@
 import html
-from typing import Callable, Iterable, NamedTuple
-from zshzlekey import KeyChord, KeySeq, KeyVariants
+from typing import Callable, Iterable, NamedTuple, Optional
+from zshzlekey import KeyChord, KeySeq, KeyVars
 from zshzlekeybinding import EscKeySeqGroup, ZshZleKeyBinding
 
 WrapFunction = Callable[[str], str] 
 
-def html_wrap(tag: str, attrs: list[str | tuple[str, str]] = []) -> WrapFunction:
-    html_attrs = " " + " ".join(map(lambda attr: 
-        f'{attr[0]}="{html.escape(attr[1])}"' if isinstance(attr, tuple) else 
-        f"{attr}", attrs)) if attrs else ""
+def html_wrap(tag: str, attrs: dict[str, Optional[str]] = {}) -> WrapFunction:
+    html_attrs = " " + " ".join(
+        f'{name}="{html.escape(value)}"' if value is not None else name 
+        for name, value in attrs.items()
+    ) if attrs else ""
     return lambda v: f"<{tag}{html_attrs}>{v}</{tag}>"
 
 no_wrap: WrapFunction = lambda b: b
@@ -22,7 +23,7 @@ class Wrappers(NamedTuple):
     line: WrapFunction = no_wrap
 
 class Separators(NamedTuple):
-    chord: str = " + "
+    key: str = " + "
     variants: str = " | "
     sequence: str = ", "
     escape: str = ", "
@@ -37,22 +38,22 @@ class KeysFormatter:
         self.wrap = wrap
         self.sep = sep
     
-    def format_keychord(self, chord: KeyChord) -> str:
-        return self.wrap.chord(self.sep.chord.join(map(self.wrap.key, chord)))
+    def keychord(self, chord: KeyChord) -> str:
+        return self.wrap.chord(chord.format(self.wrap.key, self.sep.key))
 
-    def format_keyvariants(self, variants: KeyVariants) -> str:
-        return self.wrap.variants(self.sep.variants.join(map(self.format_keychord, variants)))
+    def keyvars(self, variants: KeyVars) -> str:
+        return self.wrap.variants(self.sep.variants.join(map(self.keychord, variants)))
 
-    def format_keyseq(self, keys: KeySeq) -> str:
-        seq = self.sep.sequence.join(map(self.format_keyvariants, keys)) if keys else "Unknown key"
+    def keyseq(self, keys: KeySeq) -> str:
+        seq = self.sep.sequence.join(map(self.keyvars, keys)) if keys else "Unknown key"
         return self.wrap.sequence(seq)
 
-    def format_esckeyseqgroup(self, group: EscKeySeqGroup) -> str:
-        line = f"{self.format_keyseq(group.seq)} ({self.sep.escape.join(map(self.wrap.escape, group.esc))})"
+    def esckeyseqgroup(self, group: EscKeySeqGroup) -> str:
+        line = f"{self.keyseq(group.seq)} ({self.sep.escape.join(map(self.wrap.escape, group.esc))})"
         return self.wrap.line(line)
 
-    def format_esckeyseqgroups(self, groups: Iterable[EscKeySeqGroup]) -> str:
-        return self.sep.line.join(map(self.format_esckeyseqgroup, groups))
+    def esckeyseqgroups(self, groups: Iterable[EscKeySeqGroup]) -> str:
+        return self.sep.line.join(map(self.esckeyseqgroup, groups))
     
-    def format_binding_keys(self, binding: ZshZleKeyBinding) -> str:
-        return self.format_esckeyseqgroups(binding.keys)
+    def binding_keys(self, binding: ZshZleKeyBinding) -> str:
+        return self.esckeyseqgroups(binding.keys)

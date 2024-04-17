@@ -29,7 +29,7 @@ def generate_md():
             
             for binding in section_bindings:
                 f.write(f"\n\n### `{binding.action.text}`")
-                f.write(f"\n\n### Keys\n{fmt.format_binding_keys(binding)}")
+                f.write(f"\n\n### Keys\n{fmt.binding_keys(binding)}")
                 if binding.desc.description:
                     f.write(f"\n\n### Description\n{os.linesep.join(textwrap.wrap(binding.desc.description, 120))}")
                 f.write("\n\n---")
