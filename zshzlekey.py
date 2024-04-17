@@ -4,7 +4,8 @@ import enum
 import functools
 import itertools
 import re
-from typing import Callable, NamedTuple, Optional
+from typing import Callable, Iterator, NamedTuple, Optional
+import typing
 
 class KeyMod(enum.Flag):
     SHIFT = enum.auto()
@@ -85,41 +86,43 @@ csi = {
     (1, 'E'): "KpBegin"
 }
 
-def kv(*args: KeyChord):
-    return KeyVars(args) 
+def make_esc():
 
-def kc(*keys: KeyMod | str):
-    mod = KeyMod(0)
-    key = ""
-    for k in keys:
-        if isinstance(k, KeyMod):
-            mod |= k
-        else:
-            key = k
-    return KeyChord(mod, key)
+    def kv(*args: KeyChord):
+        return KeyVars(args) 
 
-esc = {
-    "^M": kv(kc("Enter"), kc(KeyMod.CTRL, "M")),
-    "^I": kv(kc("Tab"), kc(KeyMod.CTRL, "I")),
-    "^[[Z": kv(kc(KeyMod.SHIFT, "Tab")),
-    "^?": kv(kc("Backspace")),
-    "^[^?": kv(kc(KeyMod.ALT, "Backspace")),
-    "^H": kv(kc(KeyMod.CTRL, "Backspace")),
-    "^[^H": kv(kc(KeyMod.CTRL, KeyMod.ALT, "Backspace")),
-    "^[^_": kv(kc(KeyMod.CTRL, KeyMod.ALT, "/")),
-    "^_": kv(kc(KeyMod.CTRL, "/")),
-    "^[OA": kv(kc("Up")),
-    "^[OB": kv(kc("Down")),
-    "^[OC": kv(kc("Right")),
-    "^[OD": kv(kc("Left")),
-    "^[OE": kv(kc("KpBegin")),
-    "^[OF": kv(kc("End")),
-    "^[OH": kv(kc("Home")),
-    "^[OP": kv(kc("F1")),
-    "^[OQ": kv(kc("F2")),
-    "^[OR": kv(kc("F3")),
-    "^[OS": kv(kc("F4"))
-}
+    def kc(*keys: KeyMod | str):
+        return KeyChord(
+            functools.reduce(lambda a,b: a | b, typing.cast(Iterator[KeyMod], filter(lambda k: isinstance(k, KeyMod), keys)), KeyMod(0)), 
+            next(typing.cast(Iterator[str], filter(lambda k: isinstance(k, str), keys)))
+        )
+    
+    Ctrl, Alt, Shift = KeyMod.CTRL, KeyMod.ALT, KeyMod.SHIFT
+    esc = {
+        "^M": kv(kc("Enter"), kc(Ctrl, "M")),
+        "^I": kv(kc("Tab"), kc(Ctrl, "I")),
+        "^[[Z": kv(kc(Shift, "Tab")),
+        "^?": kv(kc("Backspace")),
+        "^[^?": kv(kc(Alt, "Backspace")),
+        "^H": kv(kc(Ctrl, "Backspace")),
+        "^[^H": kv(kc(Ctrl, Alt, "Backspace")),
+        "^[^_": kv(kc(Ctrl, Alt, "/")),
+        "^_": kv(kc(Ctrl, "/")),
+        "^[OA": kv(kc("Up")),
+        "^[OB": kv(kc("Down")),
+        "^[OC": kv(kc("Right")),
+        "^[OD": kv(kc("Left")),
+        "^[OE": kv(kc("KpBegin")),
+        "^[OF": kv(kc("End")),
+        "^[OH": kv(kc("Home")),
+        "^[OP": kv(kc("F1")),
+        "^[OQ": kv(kc("F2")),
+        "^[OR": kv(kc("F3")),
+        "^[OS": kv(kc("F4"))
+    }
+    return esc
+
+esc = make_esc()
 
 csi_group = r'(?:\^\[\[(?P<csi_key>\d+)?(?:;(?P<csi_mod>\d+))?[\x30-\x3F]*[\x20-\x2F]*(?P<csi_trailer>[\x40-\x7E]))'
 meta_group = r'(?P<meta>\\M\-)'

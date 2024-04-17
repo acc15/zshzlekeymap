@@ -33,5 +33,4 @@ def generate_html():
 
         f.write("</tbody></table></body></html>")
 
-
 generate_html()
