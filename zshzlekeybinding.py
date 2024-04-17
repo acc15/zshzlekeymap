@@ -1,5 +1,4 @@
 
-from dataclasses import dataclass
 import itertools
 from typing import Iterable, NamedTuple
 
@@ -60,4 +59,4 @@ def get_zshzle_key_bindings() -> Iterable[ZshZleKeyBinding]:
         if not skip_binding(b.action)
     ], key = binding_sort_key)
 
-    return (make_zshzle_key_binding(group) for _, group in itertools.groupby(desc_bindings, key = binding_sort_key))
+    return [make_zshzle_key_binding(group) for _, group in itertools.groupby(desc_bindings, key = binding_sort_key)]

@@ -21,7 +21,7 @@ def generate_md():
         f.write("# ZshZle bindings")
 
         f.write("\n\n## TOC\n")
-        for section in itertools.groupby(bindings, key = section_key):
+        for section, _ in itertools.groupby(bindings, key = section_key):
             f.write(f"\n1. [{section}](<#{section}>)")
 
         for section, section_bindings in itertools.groupby(bindings, key = section_key):
